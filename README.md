@@ -32,3 +32,9 @@ To run the Giphy API Flutter app locally, follow these steps:
 6. Once the app is running, you can start searching for GIFs by entering a query in the search bar. Scroll through the results to load more GIFs.
 
 That's it! You should now have the Giphy API Flutter app up and running on your local machine.
+
+## Little snippet
+
+<p align="center">
+<img src="https://github.com/thisisrocee/GiphyAPI-FlutterApp/blob/main/2023-05-16%2023-37-11.gif" width="300" height="525">
+</p>
