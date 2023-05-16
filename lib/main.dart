@@ -33,6 +33,7 @@ class _GiphySearchPageState extends State<GiphySearchPage> {
   ScrollController _scrollController = ScrollController();
   bool _isInitialLoad = true;
   int preLoadTreshold = 10;
+  bool _isSearching = false;
 
   @override
   void initState() {
@@ -43,15 +44,31 @@ class _GiphySearchPageState extends State<GiphySearchPage> {
 
   @override
   void dispose() {
-    _scrollController.removeListener(_handleScroll);
     _scrollController.dispose();
     super.dispose();
   }
 
   void _handleScroll() {
-    if (_scrollController.position.pixels ==
-        _scrollController.position.maxScrollExtent) {
-      _loadMoreGifs();
+    if (_scrollController.position.maxScrollExtent == _scrollController.offset) {
+      _isSearching ? _loadMoreGifsSearch() : _loadMoreGifs();
+    }
+  }
+
+  void _handleApiResponse(http.Response response) {
+    if (response.statusCode == 200) {
+      final data = json.decode(response.body);
+      setState(() {
+        _gifs = data['data'];
+        _loading = false;
+        _offset = _limit;
+        _isInitialLoad = false;
+      });
+    } else {
+      setState(() {
+        _gifs.clear();
+        _loading = false;
+        _isInitialLoad = false;
+      });
     }
   }
 
@@ -67,57 +84,15 @@ class _GiphySearchPageState extends State<GiphySearchPage> {
       ),
     );
 
-    if (response.statusCode == 200) {
-      final data = json.decode(response.body);
-      setState(() {
-        _gifs = data['data'];
-        _loading = false;
-        _offset = _limit;
-        _isInitialLoad = false;
-      });
-    } else {
-      setState(() {
-        _gifs.clear();
-        _loading = false;
-        _isInitialLoad = false;
-      });
-    }
+    _handleApiResponse(response);
   }
 
   void _searchGifs(String query) async {
     if (query.isEmpty) {
       _loadTrendingGifs();
+      _isSearching = false;
       return;
     }
-
-    setState(() {
-      _loading = true;
-    });
-
-    final response = await http.get(
-      Uri.parse(
-          'https://api.giphy.com/v1/gifs/search?q=$query&api_key=QjThAIEG3AtzcVpSWnUL9mRY7pYA1ufr&limit=$_limit&offset=$_offset'),
-    );
-
-    if (response.statusCode == 200) {
-      final data = json.decode(response.body);
-      setState(() {
-        _gifs = data['data'];
-        _loading = false;
-        _offset = _limit;
-        _isInitialLoad = false;
-      });
-    } else {
-      setState(() {
-        _gifs.clear();
-        _loading = false;
-        _isInitialLoad = false;
-      });
-    }
-  }
-
-  void _loadMoreGifs() async {
-    if (_loading) return;
 
     setState(() {
       _loading = true;
@@ -129,16 +104,41 @@ class _GiphySearchPageState extends State<GiphySearchPage> {
       ),
     );
 
+    _handleApiResponse(response);
+  }
+
+  void _loadMoreGifs() async {
+    if (_loading) return;
+
+    final response = await http.get(
+      Uri.parse(
+        'https://api.giphy.com/v1/gifs/trending?api_key=QjThAIEG3AtzcVpSWnUL9mRY7pYA1ufr&limit=$_limit&offset=$_offset',
+      ),
+    );
+
     if (response.statusCode == 200) {
       final data = json.decode(response.body);
       setState(() {
         _gifs.addAll(data['data']);
-        _loading = false;
-        _offset += _limit; // Update the offset correctly
+        _offset += _limit;
       });
-    } else {
+    }
+  }
+
+  void _loadMoreGifsSearch() async {
+    if (_loading) return;
+
+    final response = await http.get(
+      Uri.parse(
+        'https://api.giphy.com/v1/gifs/search?q=${_searchController.text}&api_key=QjThAIEG3AtzcVpSWnUL9mRY7pYA1ufr&limit=$_limit&offset=$_offset',
+      ),
+    );
+
+    if (response.statusCode == 200) {
+      final data = json.decode(response.body);
       setState(() {
-        _loading = false;
+        _gifs.addAll(data['data']);
+        _offset += _limit;
       });
     }
   }
@@ -151,14 +151,15 @@ class _GiphySearchPageState extends State<GiphySearchPage> {
       appBar: null,
       body: Column(children: [
         Padding(
-          padding: EdgeInsets.all(8.0),
+          padding: const EdgeInsets.all(8.0),
           child: TextField(
             controller: _searchController,
             onChanged: (value) {
               setState(() {
                 _offset = 0;
+                _isSearching = true;
               });
-              Future.delayed(Duration(milliseconds: 300), () {
+              Future.delayed(const Duration(milliseconds: 300), () {
                 _searchGifs(value);
               });
             },
@@ -168,7 +169,7 @@ class _GiphySearchPageState extends State<GiphySearchPage> {
           ),
         ),
         _loading
-            ? CircularProgressIndicator()
+            ? const CircularProgressIndicator()
             : Expanded(
                 child: GridView.builder(
                   controller: _scrollController,
@@ -180,12 +181,12 @@ class _GiphySearchPageState extends State<GiphySearchPage> {
                     childAspectRatio: 1.0,
                   ),
                   itemBuilder: (BuildContext context, int index) {
-                    if (index == _gifs.length) {
-                      return _buildLoaderIndicator();
-                    } else {
+                    if (index < _gifs.length) {
                       final gif = _gifs[index];
                       return Image.network(
                           gif['images']['fixed_height']['url']);
+                    } else {
+                      return _buildLoaderIndicator();
                     }
                   },
                 ),
@@ -196,9 +197,9 @@ class _GiphySearchPageState extends State<GiphySearchPage> {
 
   Widget _buildLoaderIndicator() {
     return Container(
-      padding: EdgeInsets.all(16.0),
+      padding: const EdgeInsets.all(16.0),
       alignment: Alignment.center,
-      child: CircularProgressIndicator(),
+      child: const CircularProgressIndicator(),
     );
   }
 }
